@@ -1,110 +1,380 @@
 <!DOCTYPE html>
+
 <html>
+
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Makanak Remote</title>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
-  <style>
-    body{
-      background:#0b0f14;
-      color:white;
-      font-family:Arial;
-      text-align:center;
-      padding:40px;
-    }
+<meta name="viewport"
+content="width=device-width, initial-scale=1">
 
-    .card{
-      max-width:420px;
-      margin:auto;
-      background:#161c24;
-      padding:30px;
-      border-radius:22px;
-    }
+<title>Makanak Remote</title>
 
-    button{
-      width:90%;
-      padding:18px;
-      margin:10px;
-      border:none;
-      border-radius:14px;
-      font-size:18px;
-      font-weight:bold;
-    }
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
-    .green{background:#38d996;}
-    .red{background:#ff5b52;color:white;}
-    .orange{background:#ffad33;}
-    .blue{background:#3b82f6;color:white;}
+<style>
 
-    #status{
-      margin:20px;
-      color:#aaa;
-    }
-  </style>
+* {
+  box-sizing:border-box;
+}
+
+body {
+
+  margin:0;
+
+  min-height:100vh;
+
+  display:flex;
+
+  align-items:center;
+  justify-content:center;
+
+  font-family:
+  Arial,
+  sans-serif;
+
+  color:white;
+
+  background:
+  radial-gradient(
+    circle at top,
+    #172333,
+    #080b10 60%
+  );
+
+  padding:20px;
+}
+
+.card {
+
+  width:100%;
+  max-width:430px;
+
+  padding:30px;
+
+  border-radius:26px;
+
+  background:
+  rgba(255,255,255,.07);
+
+  border:
+  1px solid
+  rgba(255,255,255,.12);
+
+  box-shadow:
+  0 25px 70px
+  rgba(0,0,0,.45);
+
+  backdrop-filter:
+  blur(20px);
+}
+
+.logo {
+
+  font-size:40px;
+  font-weight:900;
+
+  letter-spacing:2px;
+}
+
+.subtitle {
+
+  color:#8591a3;
+
+  margin-bottom:25px;
+}
+
+.connection {
+
+  margin:20px 0;
+
+  padding:12px;
+
+  border-radius:12px;
+
+  background:
+  rgba(255,255,255,.05);
+}
+
+.connected {
+  color:#49df98;
+}
+
+.disconnected {
+  color:#ff6258;
+}
+
+button {
+
+  width:100%;
+
+  margin-top:12px;
+
+  padding:18px;
+
+  border:none;
+
+  border-radius:15px;
+
+  font-size:17px;
+  font-weight:bold;
+
+  cursor:pointer;
+
+  transition:.15s;
+}
+
+button:active {
+
+  transform:
+  scale(.97);
+}
+
+.available {
+
+  background:#39d98a;
+
+  color:#05130c;
+}
+
+.reserve {
+
+  background:#ff574d;
+
+  color:white;
+}
+
+.alert {
+
+  background:#ffae32;
+
+  color:#171006;
+}
+
+.stop {
+
+  background:#3987ff;
+
+  color:white;
+}
+
+#lastCommand {
+
+  margin-top:20px;
+
+  color:#8491a2;
+
+  font-size:14px;
+}
+
+</style>
+
 </head>
 
 <body>
 
 <div class="card">
 
-<h1>MAKANAK</h1>
-<p>Remote Test Controller</p>
+<div class="logo">
+MAKANAK
+</div>
 
-<div id="status">Connecting...</div>
+<div class="subtitle">
+Smart Parking Remote Control
+</div>
 
-<button class="green" onclick="sendCommand('AVAILABLE')">
-AVAILABLE
+<div
+id="connection"
+class="connection disconnected">
+
+Connecting to EMQX...
+
+</div>
+
+<button
+class="available"
+onclick="sendCommand('AVAILABLE')">
+
+✓ AVAILABLE
+
 </button>
 
-<button class="red" onclick="sendCommand('RESERVE')">
-RESERVE
+<button
+class="reserve"
+onclick="sendCommand('RESERVE')">
+
+● RESERVE SPACE
+
 </button>
 
-<button class="orange" onclick="sendCommand('ALERT')">
-TEST ALERT
+<button
+class="alert"
+onclick="sendCommand('ALERT')">
+
+⚠ TEST ALARM
+
 </button>
 
-<button class="blue" onclick="sendCommand('STOP')">
-STOP ALERT
+<button
+class="stop"
+onclick="sendCommand('STOP')">
+
+■ STOP ALARM
+
 </button>
+
+<div id="lastCommand">
+
+Waiting for command...
+
+</div>
 
 </div>
 
 <script>
 
-const topic = "makanak/suly-test-93842/command";
+// ============================
+// EMQX CONFIG
+// ============================
 
-// secure websocket connection
-const client = mqtt.connect(
-  "wss://broker.emqx.io:8084/mqtt",
+const broker =
+"wss://q0f46e44.ala.asia-southeast1.emqxsl.com:8084/mqtt";
+
+const username =
+"makanak";
+
+const password =
+"123123";
+
+const topic =
+"makanak/test/command";
+
+// ============================
+// CONNECT
+// ============================
+
+const client =
+mqtt.connect(
+  broker,
   {
-    clientId: "web_" + Math.random().toString(16).slice(2)
+
+    username: username,
+
+    password: password,
+
+    clientId:
+      "MakanakWeb-" +
+      Math.random()
+      .toString(16)
+      .substring(2),
+
+    clean:true,
+
+    connectTimeout:5000,
+
+    reconnectPeriod:2000
   }
 );
 
-client.on("connect", () => {
-  document.getElementById("status").innerText =
-    "CONNECTED";
-});
+// ============================
+// CONNECTED
+// ============================
 
-client.on("error", () => {
-  document.getElementById("status").innerText =
-    "CONNECTION ERROR";
-});
+client.on(
+  "connect",
+  function() {
 
-function sendCommand(command){
+    const status =
+      document.getElementById(
+        "connection"
+      );
+
+    status.innerText =
+      "● EMQX CONNECTED";
+
+    status.className =
+      "connection connected";
+  }
+);
+
+// ============================
+// DISCONNECTED
+// ============================
+
+client.on(
+  "offline",
+  function() {
+
+    const status =
+      document.getElementById(
+        "connection"
+      );
+
+    status.innerText =
+      "● DISCONNECTED";
+
+    status.className =
+      "connection disconnected";
+  }
+);
+
+// ============================
+// ERROR
+// ============================
+
+client.on(
+  "error",
+  function(error) {
+
+    console.log(error);
+
+    document
+      .getElementById(
+        "connection"
+      )
+      .innerText =
+        "EMQX CONNECTION ERROR";
+  }
+);
+
+// ============================
+// SEND COMMAND
+// ============================
+
+function sendCommand(command) {
+
+  if (!client.connected) {
+
+    alert(
+      "EMQX is not connected yet."
+    );
+
+    return;
+  }
 
   client.publish(
     topic,
-    command
+    command,
+    {
+      qos:0
+    }
   );
 
-  document.getElementById("status").innerText =
-    "Sent: " + command;
+  document
+    .getElementById(
+      "lastCommand"
+    )
+    .innerText =
+      "Last command: " +
+      command;
+
+  console.log(
+    "Sent:",
+    command
+  );
 }
 
 </script>
 
 </body>
+
 </html>
