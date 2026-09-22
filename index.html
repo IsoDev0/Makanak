@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Makanak Remote</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    body{
+      background:#0b0f14;
+      color:white;
+      font-family:Arial;
+      text-align:center;
+      padding:40px;
+    }
+
+    .card{
+      max-width:420px;
+      margin:auto;
+      background:#161c24;
+      padding:30px;
+      border-radius:22px;
+    }
+
+    button{
+      width:90%;
+      padding:18px;
+      margin:10px;
+      border:none;
+      border-radius:14px;
+      font-size:18px;
+      font-weight:bold;
+    }
+
+    .green{background:#38d996;}
+    .red{background:#ff5b52;color:white;}
+    .orange{background:#ffad33;}
+    .blue{background:#3b82f6;color:white;}
+
+    #status{
+      margin:20px;
+      color:#aaa;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h1>MAKANAK</h1>
+<p>Remote Test Controller</p>
+
+<div id="status">Connecting...</div>
+
+<button class="green" onclick="sendCommand('AVAILABLE')">
+AVAILABLE
+</button>
+
+<button class="red" onclick="sendCommand('RESERVE')">
+RESERVE
+</button>
+
+<button class="orange" onclick="sendCommand('ALERT')">
+TEST ALERT
+</button>
+
+<button class="blue" onclick="sendCommand('STOP')">
+STOP ALERT
+</button>
+
+</div>
+
+<script>
+
+const topic = "makanak/suly-test-93842/command";
+
+// secure websocket connection
+const client = mqtt.connect(
+  "wss://broker.emqx.io:8084/mqtt",
+  {
+    clientId: "web_" + Math.random().toString(16).slice(2)
+  }
+);
+
+client.on("connect", () => {
+  document.getElementById("status").innerText =
+    "CONNECTED";
+});
+
+client.on("error", () => {
+  document.getElementById("status").innerText =
+    "CONNECTION ERROR";
+});
+
+function sendCommand(command){
+
+  client.publish(
+    topic,
+    command
+  );
+
+  document.getElementById("status").innerText =
+    "Sent: " + command;
+}
+
+</script>
+
+</body>
+</html>
