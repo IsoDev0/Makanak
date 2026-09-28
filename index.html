@@ -1,13 +1,277 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Makanak · Parking control</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
-<body><div class="shell">
-<aside><a class="brand" href="/">makanak<span>مَكانك</span></a><div class="workspace">PARKING WORKSPACE</div><nav><a href="#overview" class="selected">◉ &nbsp; Overview</a><a href="#reservations">▦ &nbsp; Reservations</a><a href="#diagnostics">⌁ &nbsp; Diagnostics</a></nav><div class="aside-bottom"><span class="tiny-dot"></span> Local control center<br><small>Camera → computer → ESP32</small></div></aside>
-<main id="overview"><header><div class="breadcrumb">WORKSPACE <span>/</span> SPACE <b id="spotLabel">A12</b></div><div class="mode" id="modeLabel">DEMO MODE</div></header>
-<section class="heading"><div><p class="eyebrow">A SPACE THAT KNOWS YOU</p><h1>Parking, connected.</h1><p>One place to manage access, reservations and your device.</p></div><button id="modeButton" class="primary">Connect hardware <span>↗</span></button></section>
-<div id="notice" role="status">Demo mode is active. Controls are simulated; no hardware commands are sent.</div>
-<section class="status-grid"><article class="stat"><label>01 / BROKER</label><strong id="brokerStatus">Not connected</strong><small id="brokerDetail">EMQX · secure MQTT</small></article><article class="stat"><label>02 / ESP32</label><strong id="deviceStatus">Waiting for device</strong><small id="deviceDetail">Fresh heartbeat required</small></article><article class="stat"><label>03 / RECOGNITION</label><strong id="cameraStatus">Stopped</strong><small id="cameraDetail">Local camera · English plate text</small></article></section>
-<div class="main-grid"><section class="panel camera-panel"><div class="panel-head"><div><h2>Plate recognition</h2><p>Live view & access decision</p></div><span class="chip" id="cameraChip">CAMERA OFF</span></div><div class="camera-view"><img id="frame" alt="Camera preview with detected plate" hidden><div id="cameraPlaceholder"><div class="scan-icon">⌗</div><h3>Your camera, right here.</h3><p>Start the camera to recognize a plate,<br>or analyze the included sample photo.</p></div><div class="view-label">AI VISION <span>•</span> SINGLE SPACE</div></div><label class="vision-mode">Recognition mode<select id="visionMode"><option value="closeup">Close-up OCR · one clear plate</option><option value="detector">YOLO plate detector · wider scene</option></select></label><div class="camera-actions"><button id="startCamera" class="primary">Start camera</button><button id="stopCamera">Stop</button><button id="photoButton">Analyze sample</button></div><div class="plate-result"><div><label>LAST READ</label><strong id="lastPlate">— — —</strong></div><div><span id="plateDecision">Waiting for a plate</span><small id="plateConfidence">Photo and typed checks never move hardware.</small></div></div></section>
-<section class="panel controls"><div class="panel-head"><div><h2>Space controls</h2><p id="controlMode">Simulated controls</p></div><span class="space-icon">P</span></div><div class="space-state"><label>REPORTED STATE</label><h3 id="spaceState">Available</h3><p id="position">Servo position unknown</p></div><div class="command-grid"><button data-command="AVAILABLE">✓ <span>Available</span><small>10° · green light</small></button><button data-command="RESERVE">● <span>Reserve</span><small>170° · red light</small></button><button data-command="OPEN">↗ <span>Lower blocker</span><small>10° · allow access</small></button><button data-command="CLOSE">↙ <span>Raise blocker</span><small>170° · block space</small></button><button data-command="ALERT" class="alarm">♧ <span>Test alarm</span><small>5-second test</small></button><button data-command="STOP">■ <span>Stop alarm</span><small>Silence buzzer</small></button></div><label class="toggle"><input id="automatic" type="checkbox"><span>Automatic access<small>Active reservation + 3 consistent reads</small></span></label><p class="hint">The blocker stays down until you raise it. Reservation records do not move the servo.</p><div id="commandStatus" class="command-status">No command sent this session.</div></section></div>
-<section id="reservations" class="panel reservations"><div class="panel-head"><div><h2>Reservations</h2><p>Only active reservations for this device’s space allow automatic access.</p></div><span class="chip" id="reservationCount">0 ACTIVE</span></div><form id="reservationForm" class="reservation-form"><label>Plate number<input name="plate" required placeholder="DJS 2961" maxlength="20"></label><label>Space<input name="spot" required value="A12" maxlength="16"></label><label>Duration<select name="minutes"><option value="60">1 hour</option><option value="120">2 hours</option><option value="1440">24 hours</option></select></label><button class="primary">Add reservation +</button></form><div class="table-wrap"><table><thead><tr><th>PLATE</th><th>SPACE</th><th>EXPIRES</th><th>STATUS</th><th></th></tr></thead><tbody id="reservationRows"></tbody></table></div><form id="checkForm" class="check-form"><span>Check a plate without moving hardware</span><input name="plate" placeholder="DJS 2961" required><button>Check reservation →</button></form></section>
-<div class="bottom-grid"><section id="diagnostics" class="panel"><div class="panel-head"><div><h2>Connection diagnostics</h2><p>Follow the path from your computer to the parking space.</p></div><button data-command="PING">Ping ESP32</button></div><div id="diagnosticRows"></div><p class="hint" id="connectionInfo"></p></section><section class="panel"><div class="panel-head"><div><h2>Activity</h2><p>Commands, recognition and device replies</p></div><span class="chip">LIVE</span></div><div id="events" class="events"></div></section></div><footer>MAKANAK CONTROL <span>Built for your parking project · Local dashboard</span></footer>
-</main></div><div id="toast" role="alert" hidden></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Makanak Control</title>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #07130f, #0f241b);
+      color: white;
+      padding: 20px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 430px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(14px);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 38px;
+      letter-spacing: 2px;
+    }
+
+    .subtitle {
+      color: #9fb0a9;
+      margin-top: 6px;
+      margin-bottom: 24px;
+    }
+
+    .status {
+      padding: 14px;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      font-weight: bold;
+    }
+
+    .connected {
+      color: #42df91;
+    }
+
+    .disconnected {
+      color: #ff6258;
+    }
+
+    button {
+      width: 100%;
+      padding: 17px;
+      margin-top: 12px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .available {
+      background: #42d995;
+      color: #07140d;
+    }
+
+    .reserve {
+      background: #ff5c52;
+      color: white;
+    }
+
+    .alert {
+      background: #ffb347;
+      color: #1b1204;
+    }
+
+    .stop {
+      background: #4285f4;
+      color: white;
+    }
+
+    .last-command {
+      margin-top: 18px;
+      font-size: 14px;
+      color: #9aa7a1;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+
+    <h1>MAKANAK</h1>
+    <div class="subtitle">Smart Parking Remote Control</div>
+
+    <div id="connectionStatus" class="status disconnected">
+      Connecting to EMQX...
+    </div>
+
+    <button class="available" onclick="sendCommand('AVAILABLE')">
+      AVAILABLE
+    </button>
+
+    <button class="reserve" onclick="sendCommand('RESERVE')">
+      RESERVE
+    </button>
+
+    <button class="alert" onclick="sendCommand('ALERT')">
+      TEST ALERT
+    </button>
+
+    <button class="stop" onclick="sendCommand('STOP')">
+      STOP ALERT
+    </button>
+
+    <div id="lastCommand" class="last-command">
+      Waiting for command...
+    </div>
+
+  </div>
+
+  <script>
+    // =========================
+    // EMQX SETTINGS
+    // =========================
+
+    const broker =
+      "wss://q0f46e44.ala.asia-southeast1.emqxsl.com:8084/mqtt";
+
+    const mqttUsername = "makanak";
+    const mqttPassword = "123123";
+
+    const commandTopic =
+      "makanak/test/command";
+
+    // =========================
+    // MQTT CONNECTION
+    // =========================
+
+    const client = mqtt.connect(
+      broker,
+      {
+        username: mqttUsername,
+        password: mqttPassword,
+
+        clientId:
+          "MakanakWeb-" +
+          Math.random()
+            .toString(16)
+            .substring(2),
+
+        clean: true,
+
+        connectTimeout: 5000,
+
+        reconnectPeriod: 2000
+      }
+    );
+
+    // =========================
+    // CONNECTED
+    // =========================
+
+    client.on("connect", function () {
+
+      const status =
+        document.getElementById(
+          "connectionStatus"
+        );
+
+      status.textContent =
+        "● EMQX CONNECTED";
+
+      status.className =
+        "status connected";
+    });
+
+    // =========================
+    // OFFLINE
+    // =========================
+
+    client.on("offline", function () {
+
+      const status =
+        document.getElementById(
+          "connectionStatus"
+        );
+
+      status.textContent =
+        "● DISCONNECTED";
+
+      status.className =
+        "status disconnected";
+    });
+
+    // =========================
+    // ERROR
+    // =========================
+
+    client.on("error", function (error) {
+
+      console.error(
+        "MQTT Error:",
+        error
+      );
+
+      const status =
+        document.getElementById(
+          "connectionStatus"
+        );
+
+      status.textContent =
+        "EMQX CONNECTION ERROR";
+
+      status.className =
+        "status disconnected";
+    });
+
+    // =========================
+    // SEND COMMAND
+    // =========================
+
+    function sendCommand(command) {
+
+      if (!client.connected) {
+
+        alert(
+          "MQTT is not connected yet."
+        );
+
+        return;
+      }
+
+      client.publish(
+        commandTopic,
+        command,
+        {
+          qos: 0
+        }
+      );
+
+      document.getElementById(
+        "lastCommand"
+      ).textContent =
+        "Last command: " +
+        command;
+
+      console.log(
+        "Sent:",
+        command
+      );
+    }
+  </script>
+
+</body>
+</html>
